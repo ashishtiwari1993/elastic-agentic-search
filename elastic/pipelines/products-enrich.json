@@ -1,0 +1,84 @@
+{
+  "description": "Normalises raw catalog JSON and builds the text used for BM25, semantic embeddings (EIS) and reranking",
+  "processors": [
+    {
+      "rename": {
+        "field": "discountPercentage",
+        "target_field": "discount_percentage",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "availabilityStatus",
+        "target_field": "availability_status",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "warrantyInformation",
+        "target_field": "warranty_information",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "shippingInformation",
+        "target_field": "shipping_information",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "returnPolicy",
+        "target_field": "return_policy",
+        "ignore_missing": true
+      }
+    },
+    {
+      "set": {
+        "field": "created_at",
+        "copy_from": "meta.createdAt",
+        "ignore_empty_value": true
+      }
+    },
+    {
+      "set": {
+        "field": "brand",
+        "value": "Unbranded",
+        "override": false
+      }
+    },
+    {
+      "script": {
+        "description": "category label, review count and the combined product_text",
+        "lang": "painless",
+        "source": "String cat = ctx.category == null ? '' : ctx.category.replace('-', ' '); ctx.category_label = cat; ctx.review_count = ctx.reviews == null ? 0 : ctx.reviews.size(); String tags = ctx.tags == null ? '' : String.join(', ', ctx.tags); ctx.product_text = ctx.title + ' by ' + ctx.brand + '. Category: ' + cat + '. Tags: ' + tags + '. ' + ctx.description + ' Price: ' + ctx.price + ' USD. Rating: ' + ctx.rating + ' of 5. ' + (ctx.warranty_information == null ? '' : ctx.warranty_information + '.');"
+      }
+    },
+    {
+      "foreach": {
+        "field": "reviews",
+        "ignore_missing": true,
+        "processor": {
+          "remove": {
+            "field": "_ingest._value.reviewerEmail",
+            "ignore_missing": true
+          }
+        }
+      }
+    },
+    {
+      "remove": {
+        "field": [
+          "meta",
+          "dimensions",
+          "weight",
+          "minimumOrderQuantity"
+        ],
+        "ignore_missing": true
+      }
+    }
+  ]
+}

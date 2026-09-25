@@ -1,0 +1,13 @@
+{
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "id":          { "type": "keyword" },
+      "title":       { "type": "text" },
+      "section":     { "type": "keyword" },
+      "tags":        { "type": "keyword", "fields": { "text": { "type": "text" } } },
+      "body":        { "type": "text", "copy_to": "kb_semantic" },
+      "kb_semantic": { "type": "semantic_text", "inference_id": "__EMBED_ID__" }
+    }
+  }
+}

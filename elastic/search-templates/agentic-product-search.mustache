@@ -1,0 +1,45 @@
+{
+  "size": {{size}}{{^size}}12{{/size}},
+  "track_total_hits": true,
+  "_source": { "excludes": ["product_semantic", "product_text", "reviews"] },
+{{#hybrid}}
+  "retriever": {
+    "text_similarity_reranker": {
+      "retriever": {
+        "rrf": {
+          "retrievers": [
+            { "standard": { "query": { "bool": {
+                "must": [ { "multi_match": { "query": "{{search_text}}", "fields": ["title^4", "brand.text^3", "category_label^2", "tags.text^2", "product_text"], "fuzziness": "AUTO" } } ],
+                "filter": [ __FILTERS__ ]
+            } } } },
+            { "standard": { "query": { "bool": {
+                "must": [ { "semantic": { "field": "product_semantic", "query": "{{search_text}}" } } ],
+                "filter": [ __FILTERS__ ]
+            } } } }
+          ],
+          "rank_window_size": 50,
+          "rank_constant": 20
+        }
+      },
+      "field": "product_text",
+      "inference_id": "__RERANK_ID__",
+      "inference_text": "{{search_text}}",
+      "rank_window_size": 20
+    }
+  }
+{{/hybrid}}
+{{^hybrid}}
+  "query": { "bool": {
+    "must": [
+      {{#search_text}}{ "multi_match": { "query": "{{search_text}}", "fields": ["title^4", "brand.text^3", "category_label^2", "tags.text^2", "product_text"], "fuzziness": "AUTO" } }{{/search_text}}
+      {{^search_text}}{ "match_all": {} }{{/search_text}}
+    ],
+    "filter": [ __FILTERS__ ]
+  } },
+  "sort": [
+    {{#sort_field}}{ "{{sort_field}}": { "order": "{{sort_order}}{{^sort_order}}desc{{/sort_order}}" } },{{/sort_field}}
+    "_score",
+    { "rating": { "order": "desc" } }
+  ]
+{{/hybrid}}
+}

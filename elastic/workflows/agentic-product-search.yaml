@@ -1,0 +1,249 @@
+version: "1"
+name: agentic_product_search
+description: >-
+  Agentic search API for the ShopSphere catalog. Takes a natural-language shopping request,
+  lets an LLM (via EIS) extract filters, rewrite the query and pick a route, then runs
+  hybrid retrieval (BM25 + semantic_text) with Jina reranking through stored search templates.
+  Returns an Elasticsearch-shaped response (took / hits / aggregations) plus an `agentic` block
+  explaining what the agent decided.
+enabled: true
+tags: [agentic-search, demo, shopsphere]
+
+triggers:
+  - type: manual
+
+inputs:
+  - name: query
+    type: string
+    required: true
+    description: The shopper's request in natural language, e.g. "nike running shoes under 100 dollars"
+  - name: size
+    type: number
+    required: false
+    default: 12
+    description: Maximum number of products to return
+
+steps:
+  # ------------------------------------------------------------------ 1. UNDERSTAND
+  # Grounded in the real index vocabulary (refreshed by setup.py at deploy time).
+  # Query understanding: intent routing + filter extraction + query rewriting, as structured output.
+  - name: understand
+    type: ai.prompt
+    __LLM_LINES__
+    with:
+      temperature: 0
+      systemPrompt: |
+        You are the query-understanding brain of an e-commerce search engine called ShopSphere.
+        Convert the shopper's request into a structured search plan. Rules:
+
+        ROUTING (intent)
+        - product_search: the user wants to find or browse products (default for anything shoppable).
+        - analytics: the user asks for aggregate facts about the catalog, e.g. "which brand has the best rated phones",
+          "average price of laptops", "how many fragrances do you have", "compare prices by brand".
+        - support_question: questions about store policies or service - returns, refunds, delivery, shipping, EMI,
+          cash on delivery, warranty claims, order tracking, payments, membership.
+        - out_of_scope: anything unrelated to shopping at this store (weather, jokes, coding, politics...).
+
+        FILTERS - only use values that appear in the provided catalog vocabulary, spelled exactly.
+        - categories: map the need to one or more catalog categories (e.g. "sneakers" -> mens-shoes and womens-shoes
+          unless a gender is given; "phone" -> smartphones; "perfume" -> fragrances; "watch for her" -> womens-watches).
+          Leave empty if unsure - do not guess.
+        - brands: only when the user names a brand. Correct misspellings ("addidas", "samsng") to catalog spelling.
+          If the named brand is not in the vocabulary, leave brands empty and keep the brand words in search_text.
+        - price_min / price_max: numbers in USD. "under 50" -> price_max 50, "between 20 and 40" -> 20 / 40,
+          "cheap"/"budget" -> no number, instead sort price_asc. Use 0 when not specified.
+        - min_rating: e.g. "highly rated", "top rated" -> 4; "4 star and above" -> 4. Use 0 when not specified.
+        - in_stock_only: true when the user says available / in stock / deliver today.
+
+        QUERY REWRITING (search_text)
+        - Rewrite into a concise English description of WHAT the user wants, fixing typos and translating
+          Hinglish/other languages ("sasta laal lipstick" -> "red lipstick").
+        - Remove words already captured as filters (price, rating, brand) but keep descriptive words
+          (colour, material, style, occasion, use case).
+        - May be empty if the filters fully capture the request (e.g. "show me all Apple products").
+        - For support_question put the user's question rewritten as a clear standalone question.
+
+        SORTING (sort_by)
+        - relevance by default; price_asc for cheapest/budget; price_desc for most expensive/premium;
+          rating_desc for best/top rated; discount_desc for deals/offers/sale.
+
+        ANALYTICS
+        - group_by: brand or category when the question compares groups, otherwise none.
+        - metric: price, rating, stock or discount_percentage - the number the user is asking about.
+
+        reasoning: one short sentence explaining the plan, written for a live demo audience.
+      prompt: |
+        Catalog vocabulary (from the live index):
+__CATALOG_VOCAB__
+
+        Shopper request: """{{ inputs.query }}"""
+      schema:
+        type: object
+        additionalProperties: false
+        required: [intent, search_text, categories, brands, price_min, price_max, min_rating, in_stock_only, sort_by, group_by, metric, reasoning]
+        properties:
+          intent:
+            type: string
+            enum: [product_search, analytics, support_question, out_of_scope]
+          search_text:
+            type: string
+          categories:
+            type: array
+            items: { type: string }
+          brands:
+            type: array
+            items: { type: string }
+          price_min: { type: number }
+          price_max: { type: number }
+          min_rating: { type: number }
+          in_stock_only: { type: boolean }
+          sort_by:
+            type: string
+            enum: [relevance, price_asc, price_desc, rating_desc, discount_desc]
+          group_by:
+            type: string
+            enum: [none, brand, category]
+          metric:
+            type: string
+            enum: [price, rating, stock, discount_percentage]
+          reasoning:
+            type: string
+
+  # ------------------------------------------------------------------ 2. PLAN
+  # Deterministic guardrails: turn the LLM plan into search-template parameters.
+  - name: search_params
+    type: data.set
+    with:
+      search_text: "{{ steps.understand.output.content.search_text }}"
+      hybrid: "{% if steps.understand.output.content.search_text != '' and steps.understand.output.content.sort_by == 'relevance' %}true{% endif %}"
+      categories: "${{ steps.understand.output.content.categories }}"
+      brands: "${{ steps.understand.output.content.brands }}"
+      price_min: "{% if steps.understand.output.content.price_min > 0 %}{{ steps.understand.output.content.price_min }}{% endif %}"
+      price_max: "{% if steps.understand.output.content.price_max > 0 %}{{ steps.understand.output.content.price_max }}{% endif %}"
+      min_rating: "{% if steps.understand.output.content.min_rating > 0 %}{{ steps.understand.output.content.min_rating }}{% endif %}"
+      in_stock: "{% if steps.understand.output.content.in_stock_only %}true{% endif %}"
+      sort_field: "{% case steps.understand.output.content.sort_by %}{% when 'price_asc' %}price{% when 'price_desc' %}price{% when 'rating_desc' %}rating{% when 'discount_desc' %}discount_percentage{% endcase %}"
+      sort_order: "{% if steps.understand.output.content.sort_by == 'price_asc' %}asc{% else %}desc{% endif %}"
+      group_by: "{% if steps.understand.output.content.group_by != 'none' %}{{ steps.understand.output.content.group_by }}{% endif %}"
+      metric: "{{ steps.understand.output.content.metric }}"
+      size: "${{ inputs.size | default: 12 }}"
+
+  # ------------------------------------------------------------------ 3. ROUTE + RETRIEVE
+  - name: route
+    type: switch
+    expression: "{{ steps.understand.output.content.intent }}"
+    cases:
+      - match: product_search
+        steps:
+          - name: search_products
+            type: elasticsearch.request
+            with:
+              method: POST
+              path: /products/_search/template
+              body:
+                id: agentic-product-search
+                params: "${{ steps.search_params.output }}"
+          # Self-correction: if the extracted filters were too strict, fall back to
+          # hybrid + rerank over the raw user request with no filters.
+          - name: zero_results_check
+            type: if
+            condition: "steps.search_products.output.hits.total.value < 1"
+            steps:
+              - name: search_products_relaxed
+                type: elasticsearch.request
+                with:
+                  method: POST
+                  path: /products/_search/template
+                  body:
+                    id: agentic-product-search
+                    params:
+                      search_text: "{{ inputs.query }}"
+                      hybrid: "true"
+                      size: "${{ inputs.size | default: 12 }}"
+              - name: use_relaxed
+                type: data.set
+                with:
+                  es: "${{ steps.search_products_relaxed.output }}"
+                  index: products
+                  template: agentic-product-search
+                  relaxed: true
+            else:
+              - name: use_strict
+                type: data.set
+                with:
+                  es: "${{ steps.search_products.output }}"
+                  index: products
+                  template: agentic-product-search
+                  relaxed: false
+
+      - match: analytics
+        steps:
+          - name: search_analytics
+            type: elasticsearch.request
+            with:
+              method: POST
+              path: /products/_search/template
+              body:
+                id: agentic-product-analytics
+                params: "${{ steps.search_params.output }}"
+          - name: use_analytics
+            type: data.set
+            with:
+              es: "${{ steps.search_analytics.output }}"
+              index: products
+              template: agentic-product-analytics
+              relaxed: false
+
+      - match: support_question
+        steps:
+          - name: search_support
+            type: elasticsearch.request
+            with:
+              method: POST
+              path: /support-kb/_search/template
+              body:
+                id: agentic-support-search
+                params:
+                  search_text: "{{ steps.understand.output.content.search_text }}"
+          - name: use_support
+            type: data.set
+            with:
+              es: "${{ steps.search_support.output }}"
+              index: support-kb
+              template: agentic-support-search
+              relaxed: false
+
+    default:
+      - name: use_out_of_scope
+        type: data.set
+        with:
+          es:
+            took: 0
+            timed_out: false
+            hits:
+              total: { value: 0, relation: eq }
+              max_score: null
+              hits: []
+          index: none
+          template: none
+          relaxed: false
+
+  # ------------------------------------------------------------------ 4. RESPOND
+  # Elasticsearch-shaped response + the agent's decisions.
+  - name: response
+    type: workflow.output
+    with:
+      took: "${{ variables.es.took }}"
+      timed_out: "${{ variables.es.timed_out }}"
+      hits: "${{ variables.es.hits }}"
+      aggregations: "${{ variables.es.aggregations }}"
+      agentic:
+        route: "{{ steps.understand.output.content.intent }}"
+        index: "{{ variables.index }}"
+        search_template: "{{ variables.template }}"
+        original_query: "{{ inputs.query }}"
+        rewritten_query: "{{ steps.understand.output.content.search_text }}"
+        understanding: "${{ steps.understand.output.content }}"
+        template_params: "${{ steps.search_params.output }}"
+        relaxed_fallback: "${{ variables.relaxed }}"
+        execution_id: "{{ execution.id }}"

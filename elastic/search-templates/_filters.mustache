@@ -1,0 +1,7 @@
+{ "bool": { "should": [ {{#categories}}{ "term": { "category": "{{.}}" } }, {{/categories}}{{^categories}}{ "match_all": {} }, {{/categories}}{ "match_none": {} } ] } },
+{ "bool": { "should": [ {{#brands}}{ "term": { "brand": "{{.}}" } }, {{/brands}}{{^brands}}{ "match_all": {} }, {{/brands}}{ "match_none": {} } ] } },
+{{#price_min}}{ "range": { "price": { "gte": {{price_min}} } } },{{/price_min}}
+{{#price_max}}{ "range": { "price": { "lte": {{price_max}} } } },{{/price_max}}
+{{#min_rating}}{ "range": { "rating": { "gte": {{min_rating}} } } },{{/min_rating}}
+{{#in_stock}}{ "range": { "stock": { "gt": 0 } } },{{/in_stock}}
+{ "match_all": {} }

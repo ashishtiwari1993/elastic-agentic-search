@@ -1,0 +1,21 @@
+{
+  "size": 3,
+  "_source": { "excludes": ["kb_semantic"] },
+  "retriever": {
+    "text_similarity_reranker": {
+      "retriever": {
+        "rrf": {
+          "retrievers": [
+            { "standard": { "query": { "multi_match": { "query": "{{search_text}}", "fields": ["title^3", "tags.text^2", "body"] } } } },
+            { "standard": { "query": { "semantic": { "field": "kb_semantic", "query": "{{search_text}}" } } } }
+          ],
+          "rank_window_size": 20
+        }
+      },
+      "field": "body",
+      "inference_id": "__RERANK_ID__",
+      "inference_text": "{{search_text}}",
+      "rank_window_size": 10
+    }
+  }
+}

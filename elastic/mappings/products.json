@@ -1,0 +1,29 @@
+{
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "id":                   { "type": "integer" },
+      "sku":                  { "type": "keyword" },
+      "title":                { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+      "description":          { "type": "text" },
+      "category":             { "type": "keyword" },
+      "category_label":       { "type": "text" },
+      "brand":                { "type": "keyword", "fields": { "text": { "type": "text" } } },
+      "tags":                 { "type": "keyword", "fields": { "text": { "type": "text" } } },
+      "price":                { "type": "float" },
+      "discount_percentage":  { "type": "float" },
+      "rating":               { "type": "float" },
+      "stock":                { "type": "integer" },
+      "availability_status":  { "type": "keyword" },
+      "warranty_information": { "type": "keyword" },
+      "shipping_information": { "type": "keyword" },
+      "return_policy":        { "type": "keyword" },
+      "review_count":         { "type": "integer" },
+      "thumbnail":            { "type": "keyword", "index": false },
+      "images":               { "type": "keyword", "index": false },
+      "created_at":           { "type": "date" },
+      "product_text":         { "type": "text", "copy_to": "product_semantic" },
+      "product_semantic":     { "type": "semantic_text", "inference_id": "__EMBED_ID__" }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+version: "1"
+name: classic_product_search
+description: >-
+  Baseline for the demo - what most sites ship today. A single BM25 multi_match over the raw
+  user text: no query understanding, no filters, no semantic retrieval, no reranking.
+enabled: true
+tags: [agentic-search, demo, baseline]
+
+triggers:
+  - type: manual
+
+inputs:
+  - name: query
+    type: string
+    required: true
+    description: The raw search box text
+  - name: size
+    type: number
+    required: false
+    default: 12
+
+steps:
+  - name: bm25_search
+    type: elasticsearch.request
+    with:
+      method: POST
+      path: /products/_search
+      body:
+        size: "${{ inputs.size | default: 12 }}"
+        track_total_hits: true
+        _source:
+          excludes: [product_semantic, product_text, reviews]
+        query:
+          multi_match:
+            query: "{{ inputs.query }}"
+            fields: [title^3, description, brand.text, category_label, tags.text]

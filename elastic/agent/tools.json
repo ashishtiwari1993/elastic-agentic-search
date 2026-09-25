@@ -1,0 +1,28 @@
+[
+  {
+    "id": "shop.agentic_search",
+    "type": "workflow",
+    "description": "Agentic search over the ShopSphere catalog and help centre. Pass the shopper's need in natural language (one need per call, include any budget, brand, rating or availability constraints). The workflow detects intent, extracts filters, rewrites the query, routes to products / analytics / support knowledge base, runs hybrid search with reranking and returns an Elasticsearch-style response (hits with _source: title, brand, category, price, rating, stock, thumbnail) plus an 'agentic' block describing what it decided.",
+    "tags": ["shopsphere", "agentic-search"],
+    "configuration": { "workflow_id": "agentic-product-search" }
+  },
+  {
+    "id": "shop.classic_search",
+    "type": "workflow",
+    "description": "Baseline keyword (BM25) search over the ShopSphere catalog with no query understanding. Used by the demo UI to compare against agentic search.",
+    "tags": ["shopsphere", "baseline"],
+    "configuration": { "workflow_id": "classic-product-search" }
+  },
+  {
+    "id": "shop.brand_stats",
+    "type": "esql",
+    "description": "Returns per-brand product count, average / min / max price and average rating for one catalog category (for example smartphones, laptops, fragrances, mens-watches). Use it to compare brands before recommending.",
+    "tags": ["shopsphere", "analytics"],
+    "configuration": {
+      "query": "FROM products | WHERE category == ?category | STATS products = COUNT(*), avg_price = ROUND(AVG(price), 2), min_price = MIN(price), max_price = MAX(price), avg_rating = ROUND(AVG(rating), 2) BY brand | SORT avg_rating DESC | LIMIT 25",
+      "params": {
+        "category": { "type": "string", "description": "Exact catalog category, e.g. smartphones, laptops, womens-dresses" }
+      }
+    }
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "size": 0,
+  "track_total_hits": true,
+  "query": { "bool": {
+    "must": [
+      {{#search_text}}{ "multi_match": { "query": "{{search_text}}", "fields": ["title^4", "brand.text^3", "category_label^2", "tags.text^2", "product_text"] } }{{/search_text}}
+      {{^search_text}}{ "match_all": {} }{{/search_text}}
+    ],
+    "filter": [ __FILTERS__ ]
+  } },
+  "aggs": {
+{{#group_by}}
+    "by_group": {
+      "terms": { "field": "{{group_by}}", "size": 25, "order": { "metric_avg": "{{sort_order}}{{^sort_order}}desc{{/sort_order}}" } },
+      "aggs": {
+        "metric_avg": { "avg": { "field": "{{metric}}{{^metric}}price{{/metric}}" } },
+        "metric_min": { "min": { "field": "{{metric}}{{^metric}}price{{/metric}}" } },
+        "metric_max": { "max": { "field": "{{metric}}{{^metric}}price{{/metric}}" } },
+        "top_product": { "top_hits": { "size": 1, "sort": [ { "{{metric}}{{^metric}}price{{/metric}}": { "order": "{{sort_order}}{{^sort_order}}desc{{/sort_order}}" } } ], "_source": ["title", "brand", "category", "price", "rating", "thumbnail"] } }
+      }
+    },
+{{/group_by}}
+    "overall": { "stats": { "field": "{{metric}}{{^metric}}price{{/metric}}" } }
+  }
+}

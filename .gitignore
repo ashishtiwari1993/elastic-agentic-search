@@ -1,0 +1,33 @@
+# --- Secrets / local config (keep .env.example) ---
+.env
+.env.*
+!.env.example
+
+# --- Claude / AI assistant scratch output ---
+Claude outputs/
+claude-output*/
+.claude/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# --- Node ---
+node_modules/
+npm-debug.log*
+
+# --- Generated deck artifacts (rebuild from agentic_search_deck/agentic_search_slides.md) ---
+Agentic_Search_Deck.html
+*.pdf
+*.pptx
+
+# --- Logs, OS and editor files ---
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

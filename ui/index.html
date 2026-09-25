@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShopSphere · Agentic Search on Elastic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div>
+        <div class="brand-name">ShopSphere</div>
+        <div class="brand-sub">Agentic Search · native in Elastic</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="search">Agentic Search API</button>
+      <button class="tab" data-tab="compare">Classic vs Agentic</button>
+      <button class="tab" data-tab="agent">Ask the Agent</button>
+    </nav>
+    <div class="arch" title="The browser only calls Elastic endpoints">UI → Kibana API → Workflow / Agent → Elasticsearch + EIS</div>
+  </header>
+
+  <!-- ============================================ SEARCH -->
+  <section id="tab-search" class="panel active">
+    <form class="searchbar" id="search-form">
+      <input id="q" autocomplete="off" placeholder="Try: nike running shoes under 100 dollars" />
+      <button type="submit">Search</button>
+    </form>
+    <div class="chips" id="examples"></div>
+
+    <div class="meta-row" id="search-meta"></div>
+
+    <div class="layout">
+      <aside class="plan" id="plan">
+        <div class="empty-plan">
+          <h3>What the agent decides</h3>
+          <p>Every search goes to <code>POST /api/agent_builder/tools/_execute</code> → the <b>agentic_product_search</b> workflow in Kibana. It grounds an LLM in the live index vocabulary, extracts filters, rewrites the query, routes it, and runs hybrid retrieval + reranking via stored search templates.</p>
+          <ol class="flow">
+            <li><span>1</span>Ground — prompt carries the index vocabulary</li>
+            <li><span>2</span>Understand — pinned EIS model (structured output)</li>
+            <li><span>3</span>Plan — search-template params</li>
+            <li><span>4</span>Route — products · analytics · help centre</li>
+            <li><span>5</span>Retrieve — BM25 + semantic_text → RRF → Jina rerank</li>
+            <li><span>6</span>Self-correct — relax filters on zero hits</li>
+          </ol>
+        </div>
+      </aside>
+      <main>
+        <div id="results" class="results"></div>
+        <details class="json" id="json-box">
+          <summary>Elasticsearch response JSON <span class="muted">(exactly what the API returned)</span></summary>
+          <div class="json-tabs">
+            <button data-view="response" class="active">Response</button>
+            <button data-view="params">Search-template params</button>
+            <button data-view="trace">Workflow execution trace</button>
+          </div>
+          <pre id="json-view"></pre>
+        </details>
+      </main>
+    </div>
+  </section>
+
+  <!-- ============================================ COMPARE -->
+  <section id="tab-compare" class="panel">
+    <form class="searchbar" id="compare-form">
+      <input id="cq" autocomplete="off" placeholder="Try: something to keep my coffee hot on a long drive" />
+      <button type="submit">Compare</button>
+    </form>
+    <div class="chips" id="compare-examples"></div>
+    <div class="compare">
+      <div class="col">
+        <div class="col-head classic"><b>Classic keyword search</b><span>BM25 multi_match on raw text</span><em id="classic-meta"></em></div>
+        <div id="classic-results" class="results compact"></div>
+      </div>
+      <div class="col">
+        <div class="col-head agentic"><b>Agentic search</b><span>understand → filter → hybrid → rerank</span><em id="agentic-meta"></em></div>
+        <div id="agentic-plan" class="mini-plan"></div>
+        <div id="agentic-results" class="results compact"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ AGENT -->
+  <section id="tab-agent" class="panel">
+    <div class="chat">
+      <div id="chat-log" class="chat-log">
+        <div class="bubble agent intro">
+          <b>ShopSphere Concierge</b> (Agent Builder agent <code>shop-concierge</code>)<br/>
+          Give me a goal, not a keyword — I'll decide what to search, how many times, and combine the results.
+        </div>
+      </div>
+      <div class="chips" id="agent-examples"></div>
+      <form class="searchbar" id="chat-form">
+        <input id="chat-input" autocomplete="off" placeholder="Planning a Goa beach trip, budget $150 total — what should I pack?" />
+        <button type="submit">Send</button>
+        <button type="button" id="chat-reset" class="ghost">New chat</button>
+      </form>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
