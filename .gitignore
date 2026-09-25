@@ -31,3 +31,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# --- Talk deck (kept locally, not published) ---
+agentic_search_deck/

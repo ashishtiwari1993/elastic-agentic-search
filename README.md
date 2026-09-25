@@ -246,19 +246,7 @@ curl -s -X DELETE "${H[@]}" "$ES_URL/_ingest/pipeline/products-enrich"
 │   ├── search-templates/       # mustache templates (hybrid, analytics, help centre)
 │   ├── workflows/              # agentic + classic workflows (YAML)
 │   └── agent/                  # Agent Builder tools + agent
-├── ui/                         # demo UI + allow-list proxy
-└── agentic_search_deck/        # talk slides (Marp source + HTML), with speaker notes and demo run-sheet
-```
-
-## Talk slides
-
-`agentic_search_deck/agentic_search_slides.html` is the deck for the talk *"Agentic Search: When the Agent Decides
-What to Search"* (about 30 minutes including the demo). Open it in a browser: arrow keys to navigate, **P** for
-presenter view with speaker notes. Edit `agentic_search_slides.md` and rebuild with:
-
-```bash
-cd agentic_search_deck
-npx @marp-team/marp-cli agentic_search_slides.md -o agentic_search_slides.html --allow-local-files
+└── ui/                         # demo UI + allow-list proxy
 ```
 
 ## Notes
