@@ -68,6 +68,7 @@ bad or unsafe query.
 - An **API key with admin privileges** on the project. Setup creates indices, an ingest pipeline, stored scripts,
   workflows, Agent Builder tools and an agent.
 - **Python 3.9+** and **Node 18+**. No packages to install; both scripts use only the standard library.
+- *Only for Cloud Run deploy:* `gcloud` (logged in) and Docker. See [First-time setup, local run, Cloud Run](#first-time-setup-local-run-cloud-run).
 
 > ⚠️ `setup.py` **deletes and re-creates** the indices `products` and `support-kb`. Use a demo project, or rename
 > them if those names are taken (see [Customise](#customise)).
@@ -102,6 +103,67 @@ What `setup.py` does, in order:
 5. Picks the chat model, then deploys the two workflows
 6. Creates the Agent Builder tools and the `shop-concierge` agent
 7. Runs four test queries and prints what the agent decided for each
+
+---
+
+## First-time setup, local run, Cloud Run
+
+The demo has two parts with different lifecycles:
+
+| Part | Where it runs | When |
+|---|---|---|
+| **Elastic side**: indices, data ingestion, templates, workflows, Agent Builder tools + agent | Inside your Elastic project | **Once**, from your laptop (`setup.py`) |
+| **Demo UI**: static page + small proxy holding the API key | `localhost`, or Cloud Run | Every time you demo |
+
+Cloud Run only ever hosts the UI. It never ingests data or creates anything in Elastic, so **always do steps 1-2 locally first**.
+
+### 1. First-time setup (local, once)
+
+Follow [Quick start](#quick-start): create `.env` with `ES_URL`, `KIBANA_URL`, `ES_API_KEY`, then run `python3 setup.py`.
+Use `python3 setup.py --skip-data` to redeploy only the templates, workflows, tools and agent without re-ingesting.
+
+### 2. Run locally
+
+```bash
+node ui/server.js           # http://localhost:8080
+```
+
+No login locally. Google sign-in is switched on only when `GOOGLE_CLIENT_ID` is a real environment variable
+(which Cloud Run sets), so the `GOOGLE_*` values in `.env` don't affect local runs.
+
+### 3. Deploy the UI to Google Cloud Run
+
+Prerequisites: `gcloud auth login` with access to the target project, Docker running, step 1 completed.
+
+Add to `.env` (see `.env.example`):
+
+```bash
+GOOGLE_CLIENT_ID=<OAuth web client id>
+GOOGLE_CLIENT_SECRET=<OAuth web client secret>
+ALLOWED_DOMAIN=elastic.co          # optional, default elastic.co
+# optional: GCP_PROJECT (default: gcloud's current project), REGION (asia-south1), SERVICE (agentic-search)
+```
+
+```bash
+./deploy.sh
+```
+
+The script:
+
+1. Enables the Cloud Run, Artifact Registry and Secret Manager APIs
+2. Stores `ES_API_KEY`, the OAuth secret and a cookie-signing key in **Secret Manager** (the key is created once, so sessions survive redeploys)
+3. Builds the image locally (`linux/amd64`, contains only `ui/`) and pushes it to Artifact Registry
+4. Deploys the Cloud Run service with `ES_URL`, `KIBANA_URL` and the secrets, and prints the URL
+
+**One-time OAuth step:** in Google Cloud Console → APIs & Services → Credentials, open the OAuth web client and add
+`<service-url>/auth/callback` under *Authorized redirect URIs* (the script prints the exact value). Google doesn't
+allow this to be set from `gcloud`.
+
+Sign-in is enforced by the app itself: only verified `@elastic.co` Google accounts get through, everything else gets
+a message on the login page. To redeploy after a UI change, just run `./deploy.sh` again.
+`PUBLIC=0 ./deploy.sh` deploys with Cloud Run IAM instead of the public URL.
+
+> To rotate the Elastic API key, update `ES_API_KEY` in `.env` and rerun `./deploy.sh`.
 
 ---
 
@@ -236,6 +298,8 @@ curl -s -X DELETE "${H[@]}" "$ES_URL/_ingest/pipeline/products-enrich"
 ```
 .
 ├── setup.py                    # one-shot setup + --test / --timing / --models
+├── deploy.sh                   # deploy the UI to Cloud Run (Google sign-in, @elastic.co)
+├── Dockerfile                  # UI-only image used by deploy.sh
 ├── .env.example                # copy to .env
 ├── data/
 │   ├── products.json           # 194 DummyJSON products
@@ -246,7 +310,7 @@ curl -s -X DELETE "${H[@]}" "$ES_URL/_ingest/pipeline/products-enrich"
 │   ├── search-templates/       # mustache templates (hybrid, analytics, help centre)
 │   ├── workflows/              # agentic + classic workflows (YAML)
 │   └── agent/                  # Agent Builder tools + agent
-└── ui/                         # demo UI + allow-list proxy
+└── ui/                         # demo UI + allow-list proxy (server.js, auth.js = Google sign-in)
 ```
 
 ## Notes
@@ -255,8 +319,3 @@ curl -s -X DELETE "${H[@]}" "$ES_URL/_ingest/pipeline/products-enrich"
   targets Elastic Cloud Serverless as of September 2026.
 - This is a demo, not an official Elastic product. Product data comes from DummyJSON; ShopSphere and its policies are fictional.
 - Author: Ashish Tiwari, Principal Solutions Architect (Search AI Specialist), Elastic.
-
-## Run locally vs. deploy to Cloud Run
-
-- **Local:** `python3 setup.py` (one-time: ingest data + create workflows/agent in Elastic), then `node ui/server.js` -> http://localhost:8080. No login locally.
-- **Cloud Run (UI only):** after setup has run, `./deploy.sh`. Builds the image locally, stores secrets in Secret Manager, deploys with Google sign-in restricted to `@elastic.co`. Needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env`, and `<service-url>/auth/callback` registered as an authorized redirect URI on the OAuth client.
