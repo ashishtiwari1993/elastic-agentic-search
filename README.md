@@ -140,7 +140,7 @@ Add to `.env` (see `.env.example`):
 ```bash
 GOOGLE_CLIENT_ID=<OAuth web client id>
 GOOGLE_CLIENT_SECRET=<OAuth web client secret>
-ALLOWED_DOMAIN=elastic.co          # optional, default elastic.co
+ALLOWED_DOMAIN=yourcompany.com     # only Google accounts from this email domain can sign in
 # optional: GCP_PROJECT (default: gcloud's current project), REGION (asia-south1), SERVICE (agentic-search)
 ```
 
@@ -159,7 +159,7 @@ The script:
 `<service-url>/auth/callback` under *Authorized redirect URIs* (the script prints the exact value). Google doesn't
 allow this to be set from `gcloud`.
 
-Sign-in is enforced by the app itself: only verified `@elastic.co` Google accounts get through, everything else gets
+Sign-in is enforced by the app itself: only verified Google accounts from `ALLOWED_DOMAIN` get through, everything else gets
 a message on the login page. To redeploy after a UI change, just run `./deploy.sh` again.
 `PUBLIC=0 ./deploy.sh` deploys with Cloud Run IAM instead of the public URL.
 
@@ -298,7 +298,7 @@ curl -s -X DELETE "${H[@]}" "$ES_URL/_ingest/pipeline/products-enrich"
 ```
 .
 ├── setup.py                    # one-shot setup + --test / --timing / --models
-├── deploy.sh                   # deploy the UI to Cloud Run (Google sign-in, @elastic.co)
+├── deploy.sh                   # deploy the UI to Cloud Run (Google sign-in, domain-restricted)
 ├── Dockerfile                  # UI-only image used by deploy.sh
 ├── .env.example                # copy to .env
 ├── data/
