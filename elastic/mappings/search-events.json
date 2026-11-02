@@ -1,0 +1,19 @@
+{
+  "settings": { "index.default_pipeline": "search-events-timestamp" },
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "@timestamp":      { "type": "date" },
+      "execution_id":    { "type": "keyword" },
+      "query":           { "type": "keyword", "fields": { "text": { "type": "text" } } },
+      "rewritten_query": { "type": "keyword", "fields": { "text": { "type": "text" } } },
+      "route":           { "type": "keyword" },
+      "categories":      { "type": "keyword" },
+      "brands":          { "type": "keyword" },
+      "sort_by":         { "type": "keyword" },
+      "hit_count":       { "type": "integer" },
+      "zero_hits":       { "type": "boolean" },
+      "relaxed":         { "type": "boolean" }
+    }
+  }
+}

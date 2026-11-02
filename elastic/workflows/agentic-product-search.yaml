@@ -228,7 +228,26 @@ __CATALOG_VOCAB__
           template: none
           relaxed: false
 
-  # ------------------------------------------------------------------ 4. RESPOND
+  # ------------------------------------------------------------------ 4. LOG
+  # One document per search, read by trending-keyword analysis. @timestamp is set by an ingest pipeline.
+  - name: log_search
+    type: elasticsearch.request
+    with:
+      method: POST
+      path: /search-events/_doc
+      body:
+        execution_id: "{{ execution.id }}"
+        query: "{{ inputs.query }}"
+        rewritten_query: "{{ steps.understand.output.content.search_text }}"
+        route: "{{ steps.understand.output.content.intent }}"
+        categories: "${{ steps.understand.output.content.categories }}"
+        brands: "${{ steps.understand.output.content.brands }}"
+        sort_by: "{{ steps.understand.output.content.sort_by }}"
+        hit_count: "${{ variables.es.hits.total.value }}"
+        zero_hits: "${{ variables.es.hits.total.value == 0 }}"
+        relaxed: "${{ variables.relaxed }}"
+
+  # ------------------------------------------------------------------ 5. RESPOND
   # Elasticsearch-shaped response + the agent's decisions.
   - name: response
     type: workflow.output

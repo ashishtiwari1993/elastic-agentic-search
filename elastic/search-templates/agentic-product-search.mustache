@@ -9,7 +9,7 @@
         "rrf": {
           "retrievers": [
             { "standard": { "query": { "bool": {
-                "must": [ { "multi_match": { "query": "{{search_text}}", "fields": ["title^4", "brand.text^3", "category_label^2", "tags.text^2", "product_text"], "fuzziness": "AUTO" } } ],
+                "must": [ { "multi_match": { "query": "{{search_text}}", "fields": ["title^4", "brand.text^3", "category_label^2", "tags.text^2", "product_text"] } } ],
                 "filter": [ __FILTERS__ ]
             } } } },
             { "standard": { "query": { "bool": {
@@ -31,7 +31,7 @@
 {{^hybrid}}
   "query": { "bool": {
     "must": [
-      {{#search_text}}{ "multi_match": { "query": "{{search_text}}", "fields": ["title^4", "brand.text^3", "category_label^2", "tags.text^2", "product_text"], "fuzziness": "AUTO" } }{{/search_text}}
+      {{#search_text}}{ "multi_match": { "query": "{{search_text}}", "fields": ["title^4", "brand.text^3", "category_label^2", "tags.text^2", "product_text"] } }{{/search_text}}
       {{^search_text}}{ "match_all": {} }{{/search_text}}
     ],
     "filter": [ __FILTERS__ ]

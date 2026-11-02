@@ -223,6 +223,18 @@ def catalog_vocab():
             f"        - price range (USD): {aggs['price']['min']} to {aggs['price']['max']}")
 
 
+def ensure_search_events():
+    """Search log read by trending analysis. Created once and never wiped, so history survives re-runs."""
+    head("3b. search-events index (search log for trending analysis)")
+    es("PUT", "/_ingest/pipeline/search-events-timestamp", {"processors": [
+        {"set": {"field": "@timestamp", "value": "{{{_ingest.timestamp}}}", "override": False}}]})
+    if exists(es, "HEAD", "/search-events"):
+        ok("index search-events: already exists, kept")
+    else:
+        es("PUT", "/search-events", json.loads((EL / "mappings" / "search-events.json").read_text()))
+        ok("index search-events: created")
+
+
 def upsert_workflow(wf_id, yaml_text):
     name = re.search(r"^name:\s*(\S+)", yaml_text, re.M).group(1)
     if exists(kb, "GET", f"/api/workflows/workflow/{wf_id}"):
@@ -363,6 +375,7 @@ def main():
     embed, rerank = pick_inference()
     if "--skip-data" not in args:
         create_indices_and_ingest(embed)
+    ensure_search_events()
     put_search_templates(rerank)
     llm = pick_llm_endpoint()
     deploy_workflows(llm)
