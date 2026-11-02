@@ -255,3 +255,8 @@ curl -s -X DELETE "${H[@]}" "$ES_URL/_ingest/pipeline/products-enrich"
   targets Elastic Cloud Serverless as of September 2026.
 - This is a demo, not an official Elastic product. Product data comes from DummyJSON; ShopSphere and its policies are fictional.
 - Author: Ashish Tiwari, Principal Solutions Architect (Search AI Specialist), Elastic.
+
+## Run locally vs. deploy to Cloud Run
+
+- **Local:** `python3 setup.py` (one-time: ingest data + create workflows/agent in Elastic), then `node ui/server.js` -> http://localhost:8080. No login locally.
+- **Cloud Run (UI only):** after setup has run, `./deploy.sh`. Builds the image locally, stores secrets in Secret Manager, deploys with Google sign-in restricted to `@elastic.co`. Needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env`, and `<service-url>/auth/callback` registered as an authorized redirect URI on the OAuth client.

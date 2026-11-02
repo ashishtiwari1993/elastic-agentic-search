@@ -1,5 +1,5 @@
 // Presentation only. Every search / decision happens inside Elastic:
-//   POST /api/agent_builder/tools/_execute  -> workflow "agentic_product_search" (or the classic baseline)
+//   POST /api/workflows/workflow/{id}/run   -> workflow "agentic_product_search" (or the classic baseline)
 //   POST /api/agent_builder/converse        -> Agent Builder agent "shop-concierge"
 //   GET  /api/workflows/executions/{id}     -> execution trace, for the demo
 // The page just renders what comes back.
@@ -42,15 +42,24 @@ async function kbn(method, path, body) {
   if (!r.ok) throw new Error(`${r.status} ${json.message || text}`);
   return json;
 }
+// Runs the search workflow directly (no Agent Builder wrapper): start it, then poll the execution
+// until it finishes. The workflow's `response` step output is the API response.
+const TOOL_WORKFLOW = { 'shop.agentic_search': 'agentic-product-search', 'shop.classic_search': 'classic-product-search' };
 async function runTool(tool_id, tool_params) {
   const t0 = performance.now();
-  const res = await kbn('POST', '/api/agent_builder/tools/_execute', { tool_id, tool_params });
+  const { workflowExecutionId: id } = await kbn('POST', `/api/workflows/workflow/${TOOL_WORKFLOW[tool_id]}/run`, { inputs: tool_params });
+  let ex;
+  for (;;) {
+    ex = await kbn('GET', `/api/workflows/executions/${id}?includeOutput=true`);
+    if (['completed', 'failed', 'cancelled', 'timed_out'].includes(ex.status)) break;
+    await new Promise((r) => setTimeout(r, 150));
+  }
   const ms = Math.round(performance.now() - t0);
-  const first = res.results?.[0];
-  if (!first || first.type === 'error') throw new Error(JSON.stringify(first?.data || res, null, 2));
-  const ex = first.data.execution;
-  if (ex.status !== 'completed') throw new Error(`Workflow ${ex.status}: ${ex.error_message || ''} (execution ${ex.execution_id})`);
-  return { output: ex.output, execution: ex, ms, raw: res };
+  if (ex.status !== 'completed') throw new Error(`Workflow ${ex.status}: ${ex.error?.message || ex.error || ''} (execution ${id})`);
+  // `response` is the workflow.output step; the classic baseline has none, so its result is the last step's output.
+  const steps = ex.stepExecutions;
+  const output = (steps.find((s) => s.stepId === 'response') || steps[steps.length - 1])?.output;
+  return { output, execution: { execution_id: id, status: ex.status }, ms, raw: ex };
 }
 
 // ------------------------------------------------------------------ rendering helpers
@@ -147,7 +156,7 @@ async function doSearch(q) {
     $('#plan').innerHTML = renderPlan(r.output, r.ms, r.execution);
     renderHits($('#results'), r.output);
     const total = r.output.hits?.total?.value ?? 0;
-    $('#search-meta').innerHTML = `${total} matching docs · ES took ${r.output.took ?? 0} ms · workflow + LLM + retrieval ${r.ms} ms · <code>POST /api/agent_builder/tools/_execute</code>`;
+    $('#search-meta').innerHTML = `${total} matching docs · ES took ${r.output.took ?? 0} ms · workflow + LLM + retrieval ${r.ms} ms · <code>POST /api/workflows/workflow/agentic-product-search/run</code>`;
     r.trace = null;
     showJson();
   } catch (e) {
@@ -263,3 +272,11 @@ $('#search-form').onsubmit = (e) => { e.preventDefault(); if ($('#q').value.trim
 $('#compare-form').onsubmit = (e) => { e.preventDefault(); if ($('#cq').value.trim()) doCompare($('#cq').value.trim()); };
 $('#chat-form').onsubmit = (e) => { e.preventDefault(); const v = $('#chat-input').value.trim(); if (v) { $('#chat-input').value = ''; doChat(v); } };
 $('#chat-reset').onclick = () => { conversationId = null; $('#chat-log').querySelectorAll('.bubble:not(.intro)').forEach((b) => b.remove()); };
+
+// Signed-in user chip (only present when Google sign-in is enabled on the server)
+fetch('/auth/me').then((r) => (r.ok ? r.json() : null)).then((u) => {
+  if (!u || !u.email) return;
+  const el = $('#user'); el.hidden = false;
+  el.textContent = u.email + ' · ';
+  const a = document.createElement('a'); a.href = '/auth/logout'; a.textContent = 'Sign out'; el.appendChild(a);
+}).catch(() => {});

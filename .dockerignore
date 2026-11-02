@@ -1,0 +1,11 @@
+.env
+.env.*
+.git
+data
+elastic
+agentic_search_deck
+Claude outputs
+*.html.bak
+Agentic_Search_Deck.html
+setup.py
+README.md

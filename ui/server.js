@@ -19,19 +19,31 @@ const ES_URL = (cfg.ES_URL || '').replace(/\/$/, '');
 const KIBANA_URL = (cfg.KIBANA_URL || ES_URL.replace('.es.', '.kb.')).replace(/\/$/, '');
 const API_KEY = cfg.ES_API_KEY;
 const PORT = Number(cfg.PORT || 8080);
+const auth = require('./auth')(process.env); // login only when set as real env vars (Cloud Run); local `node ui/server.js` stays open
 if (!KIBANA_URL || !API_KEY) { console.error('Set KIBANA_URL / ES_API_KEY in .env'); process.exit(1); }
 
 // Only these Elastic endpoints can be called from the UI.
 const ALLOW = [
-  ['POST', /^\/api\/agent_builder\/tools\/_execute$/],   // agentic search API (workflow tool)
+  ['POST', /^\/api\/workflows\/workflow\/(agentic|classic)-product-search\/run$/],  // run the search workflow directly
   ['POST', /^\/api\/agent_builder\/converse$/],          // Agent Builder agent
   ['GET', /^\/api\/workflows\/executions\/[\w-]+$/],     // execution trace for the demo
 ];
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json' };
 
-http.createServer((req, res) => {
+http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+
+  if (url.pathname === '/healthz') { res.writeHead(200); return res.end('ok'); }
+
+  // Google sign-in gate (only when GOOGLE_CLIENT_ID is set): everything else requires a valid @ALLOWED_DOMAIN session.
+  if (auth.ENABLED) {
+    if (await auth.handle(req, res, url)) return;
+    if (!auth.currentUser(req)) {
+      if (url.pathname === '/' || url.pathname === '/index.html') { res.writeHead(302, { location: '/login' }); return res.end(); }
+      res.writeHead(401, { 'content-type': 'application/json' }); return res.end('{"error":"authentication required"}');
+    }
+  }
 
   if (url.pathname === '/config') {
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -69,6 +81,7 @@ http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
   fs.createReadStream(file).pipe(res);
 }).listen(PORT, () => {
+  console.log(auth.ENABLED ? `Google sign-in enabled (only @${auth.DOMAIN} accounts)` : 'Sign-in disabled (set GOOGLE_CLIENT_ID to enable)');
   console.log(`ShopSphere demo UI  ->  http://localhost:${PORT}`);
   console.log(`Proxying allow-listed calls to ${KIBANA_URL}`);
   console.log(`Agent LLM (inference_id): ${cfg.LLM_INFERENCE_ID || 'project default - run setup.py to pin one'}`);
